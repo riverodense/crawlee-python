@@ -44,9 +44,15 @@ class GameConfig:
     water_weight: float = 3.0  # Weight per box of water (kg)
     food_weight: float = 2.0  # Weight per box of food (kg)
     
-    # Consumption rates
-    base_water_consumption: float = 5.0  # Boxes per day when staying
-    base_food_consumption: float = 7.0  # Boxes per day when staying
+    # Weather-dependent consumption rates (boxes per day when staying)
+    # Format: {Weather: (water, food)}
+    consumption_rates: Dict[Weather, Tuple[float, float]] = field(default_factory=lambda: {
+        Weather.SUNNY: (5.0, 7.0),      # 晴朗: 5箱水, 7箱食物
+        Weather.HOT: (8.0, 6.0),         # 高温: 8箱水, 6箱食物
+        Weather.SANDSTORM: (10.0, 10.0) # 沙暴: 10箱水, 10箱食物
+    })
+    
+    # Activity multipliers (applied to base consumption)
     moving_multiplier: float = 2.0  # Consumption multiplier when moving
     mining_multiplier: float = 3.0  # Consumption multiplier when mining
     
@@ -54,6 +60,19 @@ class GameConfig:
     village_price_multiplier: float = 2.0  # Village prices vs base prices
     return_price_ratio: float = 0.5  # Return value ratio at destination
     mine_base_income: float = 1000.0  # Base income per day of mining
+    
+    def get_consumption(self, weather: Weather, activity_multiplier: float = 1.0) -> Tuple[float, float]:
+        """Get resource consumption based on weather and activity.
+        
+        Args:
+            weather: Current weather condition
+            activity_multiplier: Multiplier for activity (1.0 for staying, 2.0 for moving, 3.0 for mining)
+        
+        Returns:
+            Tuple of (water consumption, food consumption) in boxes
+        """
+        base_water, base_food = self.consumption_rates[weather]
+        return (base_water * activity_multiplier, base_food * activity_multiplier)
     
     def get_water_price(self, at_village: bool = False) -> float:
         """Get water price based on location."""
@@ -230,13 +249,10 @@ class DesertCrossingGame:
             if self.state.arrived_at_mine_today:
                 return False
         
-        # Calculate consumption
-        multiplier = 1.0
-        if mine:
-            multiplier = self.config.mining_multiplier
-        
-        water_consumed = self.config.base_water_consumption * multiplier
-        food_consumed = self.config.base_food_consumption * multiplier
+        # Calculate consumption based on weather and activity
+        weather = self.get_weather(self.state.day)
+        multiplier = self.config.mining_multiplier if mine else 1.0
+        water_consumed, food_consumed = self.config.get_consumption(weather, multiplier)
         
         # Consume resources
         if not self.consume_resources(water_consumed, food_consumed):
@@ -269,7 +285,8 @@ class DesertCrossingGame:
             True if move successful, False otherwise
         """
         # Check if it's a sandstorm day
-        if self.get_weather(self.state.day) == Weather.SANDSTORM:
+        weather = self.get_weather(self.state.day)
+        if weather == Weather.SANDSTORM:
             return False
         
         # Check if target is adjacent
@@ -277,9 +294,8 @@ class DesertCrossingGame:
         if target_location_id not in current_loc.neighbors:
             return False
         
-        # Calculate consumption
-        water_consumed = self.config.base_water_consumption * self.config.moving_multiplier
-        food_consumed = self.config.base_food_consumption * self.config.moving_multiplier
+        # Calculate consumption based on weather and moving activity
+        water_consumed, food_consumed = self.config.get_consumption(weather, self.config.moving_multiplier)
         
         # Consume resources
         if not self.consume_resources(water_consumed, food_consumed):
@@ -354,8 +370,51 @@ def create_sample_map() -> Map:
     return game_map
 
 
+def create_actual_weather_forecast() -> List[Weather]:
+    """Create the actual weather forecast from the 2020 competition.
+    
+    Returns:
+        List of weather conditions for 30 days (days 1-30)
+    """
+    # Day 0 is added as SUNNY (starting day), then days 1-30 follow the actual forecast
+    weather_data = [
+        Weather.SUNNY,      # Day 0 (starting day, not in original data)
+        Weather.HOT,        # Day 1
+        Weather.HOT,        # Day 2
+        Weather.SUNNY,      # Day 3
+        Weather.SANDSTORM,  # Day 4
+        Weather.SUNNY,      # Day 5
+        Weather.HOT,        # Day 6
+        Weather.SANDSTORM,  # Day 7
+        Weather.SUNNY,      # Day 8
+        Weather.HOT,        # Day 9
+        Weather.HOT,        # Day 10
+        Weather.SANDSTORM,  # Day 11
+        Weather.HOT,        # Day 12
+        Weather.SUNNY,      # Day 13
+        Weather.HOT,        # Day 14
+        Weather.HOT,        # Day 15
+        Weather.HOT,        # Day 16
+        Weather.SANDSTORM,  # Day 17
+        Weather.SANDSTORM,  # Day 18
+        Weather.HOT,        # Day 19
+        Weather.HOT,        # Day 20
+        Weather.SUNNY,      # Day 21
+        Weather.SUNNY,      # Day 22
+        Weather.HOT,        # Day 23
+        Weather.SUNNY,      # Day 24
+        Weather.SANDSTORM,  # Day 25
+        Weather.HOT,        # Day 26
+        Weather.SUNNY,      # Day 27
+        Weather.SUNNY,      # Day 28
+        Weather.HOT,        # Day 29
+        Weather.HOT,        # Day 30
+    ]
+    return weather_data
+
+
 def create_sample_weather(days: int) -> List[Weather]:
-    """Create sample weather forecast.
+    """Create sample weather forecast (for testing/examples).
     
     Args:
         days: Number of days to forecast
@@ -363,18 +422,13 @@ def create_sample_weather(days: int) -> List[Weather]:
     Returns:
         List of weather conditions
     """
-    # Simple pattern: mostly sunny with occasional hot/sandstorm
-    weather = [Weather.SUNNY] * days
+    # Use actual forecast if available, otherwise generate sample
+    actual = create_actual_weather_forecast()
+    if days <= len(actual):
+        return actual[:days]
     
-    # Add some variation
-    if days >= 5:
-        weather[4] = Weather.HOT
-    if days >= 10:
-        weather[9] = Weather.SANDSTORM
-    if days >= 15:
-        weather[14] = Weather.HOT
-    
-    return weather
+    # Extend with sunny days if more days requested
+    return actual + [Weather.SUNNY] * (days - len(actual))
 
 
 def run_sample_game():

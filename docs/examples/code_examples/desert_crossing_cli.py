@@ -235,9 +235,9 @@ class DesertCrossingCLI:
             if 0 <= index < len(current_loc.neighbors):
                 target_id = current_loc.neighbors[index]
                 
-                # Show consumption
-                water_consumed = self.game.config.base_water_consumption * self.game.config.moving_multiplier
-                food_consumed = self.game.config.base_food_consumption * self.game.config.moving_multiplier
+                # Show consumption based on current weather
+                weather = self.game.get_weather(self.game.state.day)
+                water_consumed, food_consumed = self.game.config.get_consumption(weather, self.game.config.moving_multiplier)
                 
                 print(f"\n移动消耗: {water_consumed:.1f}箱水, {food_consumed:.1f}箱食物")
                 print(f"移动后剩余: {self.game.state.water - water_consumed:.1f}箱水, {self.game.state.food - food_consumed:.1f}箱食物")
@@ -269,8 +269,8 @@ class DesertCrossingCLI:
             print("游戏未初始化 (Game not initialized)")
             return
         
-        water_consumed = self.game.config.base_water_consumption
-        food_consumed = self.game.config.base_food_consumption
+        weather = self.game.get_weather(self.game.state.day)
+        water_consumed, food_consumed = self.game.config.get_consumption(weather, 1.0)
         
         print(f"\n停留消耗: {water_consumed:.1f}箱水, {food_consumed:.1f}箱食物")
         print(f"停留后剩余: {self.game.state.water - water_consumed:.1f}箱水, {self.game.state.food - food_consumed:.1f}箱食物")
@@ -300,8 +300,8 @@ class DesertCrossingCLI:
             print("到达矿山当天不能挖矿！(Cannot mine on arrival day!)")
             return
         
-        water_consumed = self.game.config.base_water_consumption * self.game.config.mining_multiplier
-        food_consumed = self.game.config.base_food_consumption * self.game.config.mining_multiplier
+        weather = self.game.get_weather(self.game.state.day)
+        water_consumed, food_consumed = self.game.config.get_consumption(weather, self.game.config.mining_multiplier)
         
         print(f"\n挖矿消耗: {water_consumed:.1f}箱水, {food_consumed:.1f}箱食物")
         print(f"挖矿收益: ¥{self.game.config.mine_base_income:.2f}")

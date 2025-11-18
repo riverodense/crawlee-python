@@ -153,22 +153,19 @@ class DesertCrossingOptimizer:
         
         # If at mine and not just arrived, consider mining
         if current_loc.type == LocationType.MINE and not state.arrived_at_mine_today:
-            water_needed = self.config.base_water_consumption * self.config.mining_multiplier
-            food_needed = self.config.base_food_consumption * self.config.mining_multiplier
+            water_needed, food_needed = self.config.get_consumption(weather, self.config.mining_multiplier)
             if state.water >= water_needed and state.food >= food_needed:
                 actions.append(Action("mine", mine=True))
         
         # Consider staying (if not forced by sandstorm, this is optional)
-        water_needed = self.config.base_water_consumption
-        food_needed = self.config.base_food_consumption
+        water_needed, food_needed = self.config.get_consumption(weather, 1.0)
         if state.water >= water_needed and state.food >= food_needed:
             actions.append(Action("stay"))
         
         # Consider moving to adjacent locations (if not sandstorm)
         if weather != Weather.SANDSTORM:
             for neighbor_id in current_loc.neighbors:
-                water_needed = self.config.base_water_consumption * self.config.moving_multiplier
-                food_needed = self.config.base_food_consumption * self.config.moving_multiplier
+                water_needed, food_needed = self.config.get_consumption(weather, self.config.moving_multiplier)
                 if state.water >= water_needed and state.food >= food_needed:
                     actions.append(Action("move", target_location=neighbor_id))
         
@@ -213,10 +210,10 @@ class DesertCrossingOptimizer:
             return new_state
         
         elif action.type == "stay" or action.type == "mine":
-            # Calculate consumption
+            # Calculate consumption based on weather
+            weather = self.weather_forecast[state.day] if state.day < len(self.weather_forecast) else Weather.SUNNY
             multiplier = self.config.mining_multiplier if action.type == "mine" else 1.0
-            water_consumed = self.config.base_water_consumption * multiplier
-            food_consumed = self.config.base_food_consumption * multiplier
+            water_consumed, food_consumed = self.config.get_consumption(weather, multiplier)
             
             # Check resources
             if new_state.water < water_consumed or new_state.food < food_consumed:
@@ -244,9 +241,8 @@ class DesertCrossingOptimizer:
             if action.target_location not in current_loc.neighbors:
                 return None
             
-            # Calculate consumption
-            water_consumed = self.config.base_water_consumption * self.config.moving_multiplier
-            food_consumed = self.config.base_food_consumption * self.config.moving_multiplier
+            # Calculate consumption based on weather
+            water_consumed, food_consumed = self.config.get_consumption(weather, self.config.moving_multiplier)
             
             # Check resources
             if new_state.water < water_consumed or new_state.food < food_consumed:
